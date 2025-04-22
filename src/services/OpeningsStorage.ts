@@ -1,4 +1,3 @@
- import { error } from 'console';
 import WireStorage from './WireStorage';
 import CsvBuilder from './CsvBuilder';
 /*
@@ -18,10 +17,14 @@ class OpeningsStorage {
         `SELECT * FROM openingtable WHERE screentype = '${screentype}'`;
 
     private csv_paths = {
+        // parse woven result
         woven: 'tables/wovenWireMeshes/woven',
         flattop: 'tables/flattopWireMeshes/flattop',
         straightHarp: 'tables/straightHarpWireMeshes/straightHarp',
         harp: 'tables/harpWireMeshes/harp',
+        // parse inrange result
+        welded: 'tables/weldedWireMeshes/welded',
+        piano: 'tables/pianoWireMeshes/piano',
     };
     
     constructor( private wire_storage: WireStorage ) {}
@@ -34,6 +37,10 @@ class OpeningsStorage {
 
     get_harp_openings = () => this.get_openings(this.csv_paths.harp)
 
+    get_welded_openings = () => this.get_openings(this.csv_paths.welded, 'welded')
+
+    get_piano_openings = () => this.get_openings(this.csv_paths.piano, 'piano')
+
     /**
      * MESHES OPENINGS
      * @param error 
@@ -41,6 +48,7 @@ class OpeningsStorage {
      */
     get_openings = (
         filePath: string,
+        type: string = 'woven'
     ) => (
         error: unknown, 
         queryResult: any[]
@@ -48,17 +56,21 @@ class OpeningsStorage {
         if (error) throw error;
 
         const {
-            woven_openings_array,
-            woven_wire_std,
-            woven_wire_stn
-        } = this._parse_woven_result(queryResult);
+            openings_array,
+            wire_std,
+            wire_stn
+        } = type === 'welded' 
+                ? this._parse_inrange_result(queryResult)
+                : type === 'piano' 
+                ? this._parse_inrange_result(queryResult, true) 
+                : this._parse_woven_result(queryResult);
 
         /** CSV BUILD   */
         const csvOpenings = new CsvBuilder(
             ['opening[mm]', 'wire dia[mm] std', 'wire dia[mm] stn', 'fi_std'],
             ';', `${filePath}wire_meshes_openings_table.csv`
         );
-        for (const [key, standard, stainless, std] of woven_openings_array) {
+        for (const [key, standard, stainless, std] of openings_array) {
             csvOpenings.addRow([
                 key.toString(),
                 standard.join(', '),
@@ -74,7 +86,7 @@ class OpeningsStorage {
             ['wire dia[mm] std', 'opening[mm]'],
             ';', `${filePath}_wire_standard.csv`
         );
-        for (const [key, openings] of Object.entries(woven_wire_std)) {
+        for (const [key, openings] of Object.entries(wire_std)) {
             csvWiresStandard.addRow([
                 key.toString(),
                 openings.join(', ')
@@ -87,7 +99,7 @@ class OpeningsStorage {
             ['wire dia[mm] stn', 'opening[mm]'],
             ';', `${filePath}_wire_stainless.csv`
         );
-        for (const [key, openings] of Object.entries(woven_wire_stn)) {
+        for (const [key, openings] of Object.entries(wire_stn)) {
             csvWiresStainless.addRow([
                 key.toString(),
                 openings.join(', ')
@@ -96,10 +108,80 @@ class OpeningsStorage {
         csvWiresStainless.save();
     }
 
+    _parse_inrange_result = (
+        queryResult: any[],
+        is_piano: boolean = false
+    ) => {
+        const openings_array: [number, number[], number[], number][] = [];
+        const wire_std: { [key: number]: number[] } = {};
+        const wire_stn: { [key: number]: number[] } = {};
+
+        const wire_table = this.wire_storage.wires;
+
+        queryResult.forEach((row) => {
+            if (row.fi_min !== null && row.fi_max !== null) {
+                const row_fi_set: number[] = Object.keys(wire_table).filter((fi) => {
+                    const wire_diameter = parseFloat(fi);
+                    return (
+                        wire_diameter >= parseFloat(row.fi_min) &&
+                        wire_diameter <= parseFloat(row.fi_max)
+                    );
+                }).map(Number);
+
+                // by opening
+                openings_array.push([
+                    parseFloat(row.opening),
+                    row_fi_set.filter((fi: number) => is_piano 
+                        ? wire_table[fi].is_piano == true 
+                        : wire_table[fi].is_standard == true
+                    ),
+                    row_fi_set.filter((fi: number) => wire_table[fi].is_stainless == true),
+                    row.fi_std,
+                ]);
+
+                // by wire diameter
+                row_fi_set.forEach((fi) => {
+                    if (is_piano 
+                        ? wire_table[fi].is_piano == true 
+                        : wire_table[fi].is_standard == true
+                    ) {
+                        if (wire_std[fi] === undefined) {
+                            wire_std[fi] = [parseFloat(row.opening)];
+                        } else {
+                            wire_std[fi].push(parseFloat(row.opening));
+                            wire_std[fi] = [...new Set(wire_std[fi])];
+                        }
+                    }
+                    if (wire_table[fi].is_stainless == true) {
+                        if (wire_stn[fi] === undefined) {
+                            wire_stn[fi] = [parseFloat(row.opening)];
+                        } else {
+                            wire_stn[fi].push(parseFloat(row.opening));
+                            wire_stn[fi] = [...new Set(wire_stn[fi])];
+                        }
+                    }
+                });
+            }
+        });
+
+        /* SORTING BY OPENINGS */
+        openings_array.sort((a, b) => {
+            if (a[0] < b[0]) return -1;
+            if (a[0] > b[0]) return 1;
+            return 0;
+        });
+
+        return { 
+            openings_array, 
+            wire_std, 
+            wire_stn 
+        };
+    }
+
     _parse_woven_result = (queryResult: any[]) => {
-        const woven_openings_array: [number, number[], number[], number][] = [];
-        const woven_wire_std: { [key: number]: number[] } = {};
-        const woven_wire_stn: { [key: number]: number[] } = {};
+        const openings_array: [number, number[], number[], number][] = [];
+        const wire_std: { [key: number]: number[] } = {};
+        const wire_stn: { [key: number]: number[] } = {};
 
         const wire_table = this.wire_storage.wires;
 
@@ -108,7 +190,7 @@ class OpeningsStorage {
                 const row_fi_set: number[] = row.fi_set.split("x").map(Number);
 
                 // by opening
-                woven_openings_array.push([
+                openings_array.push([
                     parseFloat(row.opening),
                     row_fi_set.filter((fi: number) => wire_table[fi].is_standard == true),
                     row_fi_set.filter((fi: number) => wire_table[fi].is_stainless == true),
@@ -118,19 +200,19 @@ class OpeningsStorage {
                 // by wire diameter
                 row_fi_set.forEach((fi) => {
                     if (wire_table[fi].is_standard == true) {
-                        if (woven_wire_std[fi] === undefined) {
-                            woven_wire_std[fi] = [parseFloat(row.opening)];
+                        if (wire_std[fi] === undefined) {
+                            wire_std[fi] = [parseFloat(row.opening)];
                         } else {
-                            woven_wire_std[fi].push(parseFloat(row.opening));
-                            woven_wire_std[fi] = [...new Set(woven_wire_std[fi])];
+                            wire_std[fi].push(parseFloat(row.opening));
+                            wire_std[fi] = [...new Set(wire_std[fi])];
                         }
                     }
                     if (wire_table[fi].is_stainless == true) {
-                        if (woven_wire_stn[fi] === undefined) {
-                            woven_wire_stn[fi] = [parseFloat(row.opening)];
+                        if (wire_stn[fi] === undefined) {
+                            wire_stn[fi] = [parseFloat(row.opening)];
                         } else {
-                            woven_wire_stn[fi].push(parseFloat(row.opening));
-                            woven_wire_stn[fi] = [...new Set(woven_wire_stn[fi])];
+                            wire_stn[fi].push(parseFloat(row.opening));
+                            wire_stn[fi] = [...new Set(wire_stn[fi])];
                         }
                     }
                 });
@@ -138,16 +220,16 @@ class OpeningsStorage {
         });
 
         /* SORTING BY OPENINGS */
-        woven_openings_array.sort((a, b) => {
+        openings_array.sort((a, b) => {
             if (a[0] < b[0]) return -1;
             if (a[0] > b[0]) return 1;
             return 0;
         });
 
         return { 
-            woven_openings_array, 
-            woven_wire_std, 
-            woven_wire_stn 
+            openings_array, 
+            wire_std, 
+            wire_stn 
         };
     }
 

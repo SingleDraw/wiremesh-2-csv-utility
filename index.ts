@@ -1,5 +1,4 @@
 import { connection } from './src/db';
-
 import WireStorage from './src/services/WireStorage';
 import OpeningsStorage from './src/services/OpeningsStorage';
 
@@ -46,7 +45,9 @@ async function main() {
             queryAsync(openings_storage.queryFn(1), openings_storage.get_woven_openings()),
             queryAsync(openings_storage.queryFn(7), openings_storage.get_flattop_openings()),
             queryAsync(openings_storage.queryFn(5), openings_storage.get_straightHarp_openings()),
-            queryAsync(openings_storage.queryFn(6), openings_storage.get_harp_openings())
+            queryAsync(openings_storage.queryFn(6), openings_storage.get_harp_openings()),
+            queryAsync(openings_storage.queryFn(3), openings_storage.get_welded_openings()),
+            queryAsync(openings_storage.queryFn(4), openings_storage.get_piano_openings())
         ]);
   
         // Step 4: End connection
