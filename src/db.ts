@@ -1,4 +1,4 @@
-import { createConnection } from 'mysql';
+import { createConnection, MysqlError } from 'mysql';
 import { join } from 'path';
 import { config as dotenv } from 'dotenv';
 
@@ -23,8 +23,8 @@ const connection = createConnection({
  */
 function connectToDatabase() {
     return new Promise((resolve, reject) => {
-      connection.connect((err: unknown) => {
-        if (err instanceof Error) {
+      connection.connect((err: MysqlError | null) => {
+        if (err) {
           console.error('❌ Error connecting to DB:', err.message);
           reject(err);
         } else {
