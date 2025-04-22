@@ -20,6 +20,8 @@ class OpeningsStorage {
     private csv_paths = {
         woven: 'tables/wovenWireMeshes/woven',
         flattop: 'tables/flattopWireMeshes/flattop',
+        straightHarp: 'tables/straightHarpWireMeshes/straightHarp',
+        harp: 'tables/harpWireMeshes/harp',
     };
     
     constructor( private wire_storage: WireStorage ) {}
@@ -27,6 +29,10 @@ class OpeningsStorage {
     get_woven_openings = () => this.get_openings(this.csv_paths.woven)
 
     get_flattop_openings = () => this.get_openings(this.csv_paths.flattop)
+
+    get_straightHarp_openings = () => this.get_openings(this.csv_paths.straightHarp)
+
+    get_harp_openings = () => this.get_openings(this.csv_paths.harp)
 
     /**
      * MESHES OPENINGS
