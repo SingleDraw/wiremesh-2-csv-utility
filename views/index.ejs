@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CSV Downloads</title>
+</head>
+<body>
+  <h1>CSV Downloads</h1>
+  
+  <div>
+    <% Object.entries(csv_downloads).forEach(function([key, value]) { %>
+        <ul>
+            <% Object.entries(value).forEach(function([key, value]) { %>
+                <li><a href="<%= value.path %>"><%= key %></a></li>
+            <% }); %>
+        </ul>
+    <% }); %>
+  </div>
+
+</body>
+</html>

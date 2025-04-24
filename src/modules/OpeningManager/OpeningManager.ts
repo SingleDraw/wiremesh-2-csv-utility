@@ -1,30 +1,25 @@
 import { WireStorage, wireResult } from '../../services/WireStorage';
 import OpeningsStorage from '../../services/OpeningsStorage';
-import { queryCallback, MysqlError, Connection } from 'mysql';
+import { queryCallback, MysqlError, PoolConnection } from 'mysql';
+import { pool } from '../../db';
 
 export default class OpeningManager {
     private openings_storage: OpeningsStorage;
+    private connection: PoolConnection | null = null;
     constructor(
-        private connection : Connection,
         private wire_storage: WireStorage = new WireStorage(),
     ) {
         this.openings_storage = new OpeningsStorage(this.wire_storage);
     }
-
-    connectAsync = (): Promise<void> => 
-        new Promise((resolve, reject) => {
-            this.connection.connect(err => {
-            if (err) return reject(err);
-            console.log('Connection established');
-            resolve();
-          });
-        });
 
     queryAsync = (
         sql: string, 
         callback: queryCallback
     ): Promise<void> => 
         new Promise((resolve, reject) => {
+            if (!this.connection) {
+                return reject(new Error('No connection available'));
+            }
             this.connection.query(
                 sql, 
                 (
@@ -39,10 +34,12 @@ export default class OpeningManager {
         });
     
     async main() {
+
+        this.connection = await new Promise((resolve, reject) =>
+            pool.getConnection((err, conn) => (err ? reject(err) : resolve(conn)))
+          );
+
         try {
-            // 1: Connect to the database
-            await this.connectAsync();
-        
             // 2: Populate wire_storage
             await this.queryAsync(
                 this.wire_storage.query, 
@@ -60,19 +57,13 @@ export default class OpeningManager {
                 this.queryAsync(this.openings_storage.queryFn(3), this.openings_storage.get_welded_openings()),
                 this.queryAsync(this.openings_storage.queryFn(4), this.openings_storage.get_piano_openings())
             ]);
-      
-            // 4: End connection
-            this.connection.end((err: unknown) => {
-                if (err) {
-                console.log('Error ending the connection');
-                return;
-                }
-                console.log('Connection ended');
-            });
     
         } catch (err) {
             console.error('Error during DB operations:', err);
-            this.connection.end(); 
+        } finally {
+            if (this.connection) {
+                this.connection.release();
+            }
         }
     }
 }

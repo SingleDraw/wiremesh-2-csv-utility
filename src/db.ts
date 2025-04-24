@@ -1,4 +1,4 @@
-import { createConnection, MysqlError } from 'mysql';
+import { createPool } from 'mysql';
 import { join } from 'path';
 import { config as dotenv } from 'dotenv';
 
@@ -6,36 +6,14 @@ import { config as dotenv } from 'dotenv';
 dotenv({ path: join(__dirname, '..', '.env') });
 
 /**
- * Database connection
- * @type {mysql.Connection}
+ * * MySQL connection pool
+ * * @module db
+ * * @requires mysql
  */
-
-const connection = createConnection({
+export const pool = createPool({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
-  database: process.env.DB_DATABASE
+  database: process.env.DB_DATABASE,
+  connectionLimit: 10 // Adjust the limit as needed
 });
-
-/**
- * Connect to the MySQL database
- * @returns {Promise<mysql.Connection>} - A promise that resolves to the MySQL connection object.
- */
-function connectToDatabase() {
-    return new Promise((resolve, reject) => {
-      connection.connect((err: MysqlError | null) => {
-        if (err) {
-          console.error('❌ Error connecting to DB:', err.message);
-          reject(err);
-        } else {
-          console.log('✅ MySQL connection established');
-          resolve(connection);
-        }
-      });
-    });
-  }
-  
-export {
-    connection,
-    connectToDatabase,
-};
